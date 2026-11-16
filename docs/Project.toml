@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+MSABuilder = "3c9d77aa-ce90-4f2b-aee2-46a7ff8f45a6"
+
+[compat]
+Documenter = "1"
