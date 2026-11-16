@@ -9,9 +9,8 @@ one up by name, and iterating gives `name => sequence` pairs. `msa.names`
 holds the names, `size(msa)` is (sequences, columns). Write it with
 [`writemsa`](@ref).
 
-With PhyloBuilder loaded, an `MSA` can be passed straight to its distance
-and tree functions (`nj(msa)`, `distances(msa)`, …) or converted with
-`Alignment(msa)`.
+An `MSA` is a collection of `name => sequence` pairs, so PhyloBuilder's
+distance and tree functions take it directly: `align(seqs) |> nj`.
 """
 struct MSA
     names::Vector{String}

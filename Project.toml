@@ -8,15 +8,12 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [weakdeps]
 DenoiseDNA = "be660749-8e35-4f43-b287-dc089089f845"
-PhyloBuilder = "441aa440-a7f5-4914-ba7f-167a6c1feca4"
 
 [extensions]
 MSABuilderDenoiseDNAExt = "DenoiseDNA"
-MSABuilderPhyloBuilderExt = "PhyloBuilder"
 
 [compat]
 DenoiseDNA = "0.2"
-PhyloBuilder = "0.1"
 Printf = "1"
 julia = "1.10"
 

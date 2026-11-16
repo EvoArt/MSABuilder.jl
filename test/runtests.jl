@@ -102,13 +102,13 @@ alignedrows(path) = [String(strip(l)) for l in eachline(path) if !startswith(l, 
         @test sprint(show, m) == "MSA(2 sequences × 15 columns)"
     end
 
-    # the extensions, when the packages are installed (not on CI yet)
+    # PhyloBuilder takes an MSA as a collection of name => sequence pairs
     if Base.find_package("PhyloBuilder") !== nothing
         @testset "PhyloBuilder" begin
             @eval using PhyloBuilder
             m = align(["ACGTACGTTTGACCA", "ACGTACGTGACCA", "ACGAACGTTTGACCA", "ACGAACGTTTGACCT"]; progress=false)
             @test Alignment(m) isa Alignment
-            @test ntaxa(m) == 4 && nsites(m) == size(m, 2)
+            @test ntaxa(Alignment(m)) == 4 && nsites(Alignment(m)) == size(m, 2)
             @test distances(m) == distances(Alignment(m))
             @test nj(m; progress=false) isa PhyloBuilder.PhyloTree
         end

@@ -1,9 +1,5 @@
 # API
 
-```@meta
-CurrentModule = MSABuilder
-```
-
 ```@docs
 MSABuilder
 align
