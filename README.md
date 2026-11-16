@@ -29,6 +29,7 @@ With [DenoiseDNA](https://github.com/EvoArt/DenoiseDNA.jl),
 ```julia
 using DenoiseDNA, MSABuilder, PhyloBuilder, PlotPhyloTree
 
-tree = seqtab_nochim |> align |> nj        # ASVs named ASV1, ASV2, …
+asvs = seqtab_nochim.sequences
+tree = align(asvs; names=["ASV$i" for i in eachindex(asvs)]) |> nj
 savefig("asv-tree.svg", treeplot(midpoint(tree)))
 ```

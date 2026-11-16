@@ -28,14 +28,15 @@ writemsa("asvs_aligned.fasta", msa)
 
 With [DenoiseDNA](https://github.com/EvoArt/DenoiseDNA.jl),
 [PhyloBuilder](https://github.com/EvoArt/PhyloBuilder.jl) and
-[PlotPhyloTree](https://github.com/EvoArt/PlotPhyloTree.jl), `align` takes a
-sequence table and its result goes straight into the tree builders:
+[PlotPhyloTree](https://github.com/EvoArt/PlotPhyloTree.jl), `align` takes the ASV
+sequences and its result goes straight into the tree builders:
 
 ```julia
 using DenoiseDNA, MSABuilder, PhyloBuilder, PlotPhyloTree
 
 nochim = removeBimeraDenovo(seqtab; method="consensus")
-tree   = nochim |> align |> nj      # ASVs are named ASV1, ASV2, … in column order
+asvs   = nochim.sequences
+tree   = align(asvs; names=["ASV$i" for i in eachindex(asvs)]) |> nj
 savefig("asv-tree.svg", treeplot(midpoint(tree)))
 ```
 
