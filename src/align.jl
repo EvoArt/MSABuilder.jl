@@ -49,8 +49,6 @@ BioSequences' `LongDNA`). Gaps in the input are removed, `U` is read as
 `T`, and characters other than IUPAC nucleotide codes become `N`. Names
 default to `seq1`, `seq2`, …; rows of the result are in input order.
 
-With DenoiseDNA loaded, `align(seqtab)` aligns the ASVs of a
-`SequenceTable` (named `ASV1`, `ASV2`, … in column order).
 """
 function align(seqs::AbstractVector; names=nothing, kwargs...)
     names = names === nothing ? ["seq$i" for i in eachindex(seqs)] : names
