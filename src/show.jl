@@ -37,8 +37,8 @@ function Base.show(io::IO, ::MIME"text/plain", m::MSA)
         col(k, x) = x >= 0.9 ? _PAL.good : x >= 0.5 ? _PAL.amber : _PAL.bad
         _kv(io, "conserved", _spark(io, _bin(cons, max(10, min(W, 100) - _KEY_W - 4)), 0, 1; color=col))
     end
-    s = m.scoring
-    _kv(io, "scoring", _note(io, "match $(s.match), mismatch $(s.mismatch), gap $(s.gapopen) + $(s.gapextend)/column, $(s.k)-mer guide tree"))
+    s = m.params
+    _kv(io, "method", "MUSCLE 3.8.31" * _note(io, " · maxiters $(s.maxiters), gap open $(s.gapopen), extend $(s.gapextend)"))
     k = _nshow(io, n, 8)
     _section(io, "Sequences", min(W, 100))
     nw = min(24, maximum(length, view(m.names, 1:k)))

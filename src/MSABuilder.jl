@@ -1,9 +1,8 @@
 """
     MSABuilder
 
-Multiple sequence alignment of nucleotide sequences in pure Julia:
-progressive alignment along a k-mer UPGMA guide tree, with profile–profile
-Gotoh alignment and affine gap penalties.
+Multiple sequence alignment of nucleotide sequences: a Julia port of
+MUSCLE 3.8.31 (Edgar 2004).
 """
 module MSABuilder
 
@@ -13,9 +12,13 @@ export MSA, align, readsequences, writemsa
 
 include("style.jl")
 include("progress.jl")
+include("alphabet.jl")
 include("sequences.jl")
-include("guidetree.jl")
+include("kmerdist.jl")
+include("tree.jl")
 include("profile.jl")
+include("progressive.jl")
+include("refine.jl")
 include("align.jl")
 include("show.jl")
 

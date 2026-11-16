@@ -2,65 +2,22 @@ using MSABuilder
 using Random
 using Test
 
+const M = MSABuilder
+const FIX = joinpath(@__DIR__, "fixtures")
+include("simulate.jl")
+
 ungap(s) = replace(s, '-' => "")
-
-# ---------------------------------------------------------------- simulation
-# Sequences evolved down a two-level tree with substitutions, insertions and
-# deletions. Each residue carries the id of its true alignment column, so
-# the alignment can be scored against the truth.
-
-function evolve(rng, seq, sub, nindel, nextid)
-    s = [(id, rand(rng) < sub ? rand(rng, setdiff("ACGT", b)) : b) for (id, b) in seq]
-    for _ in 1:nindel
-        len = rand(rng, 1:3)
-        p = rand(rng, 2:length(s)-len-1)
-        if rand(rng, Bool)
-            deleteat!(s, p:p+len-1)
-        else
-            for k in 1:len
-                insert!(s, p, (nextid[] += 1, rand(rng, "ACGT")))
-            end
-        end
-    end
-    return s
-end
-
-function simulate(rng; L=300, clades=4, leaves=5)
-    nextid = Ref(L)
-    root = [(i, rand(rng, "ACGT")) for i in 1:L]
-    seqs = Vector{Vector{Tuple{Int,Char}}}()
-    for _ in 1:clades
-        anc = evolve(rng, root, 0.08, 1, nextid)
-        for _ in 1:leaves
-            push!(seqs, evolve(rng, anc, 0.03, 1, nextid))
-        end
-    end
-    return seqs
-end
-
-# share of the truly homologous residue pairs that are in the same column
-function sp_score(m::MSA, truth)
-    col = map(1:length(m)) do r
-        cols = Dict{Int,Int}()
-        k = 0
-        for (c, x) in enumerate(m[r])
-            x == '-' && continue
-            k += 1
-            cols[truth[r][k][1]] = c
-        end
-        cols
-    end
-    hit = tot = 0
-    for a in eachindex(truth), b in a+1:length(truth), (id, ca) in col[a]
-        cb = get(col[b], id, nothing)
-        cb === nothing && continue
-        tot += 1
-        hit += ca == cb
-    end
-    return hit / tot
-end
+alignedrows(path) = [String(strip(l)) for l in eachline(path) if !startswith(l, '>')]
 
 @testset "MSABuilder" begin
+    @testset "parity with MUSCLE 3.8.31 (maxiters = 1)" begin
+        # references from test/fixtures/make_fixtures.R (Bioconductor msa)
+        for name in ("tiny", "small", "short", "dups", "ambig", "easy", "medium", "hard", "many", "long")
+            m = align(joinpath(FIX, "$name.fa"); progress=false)
+            @test collect(last.(m)) == alignedrows(joinpath(FIX, "$(name)_it1.fa"))
+        end
+    end
+
     @testset "basics" begin
         seqs = ["ACGTACGTTTGACCA", "ACGTACGTGACCA", "ACGAACGTTTGACCA"]
         m = align(seqs; progress=false)
@@ -70,50 +27,65 @@ end
         @test allequal(length.(last.(m)))
         @test m["seq2"] == m[2]
         @test_throws KeyError m["nope"]
-
-        # identical sequences: no gaps
-        m = align(fill("ACGTTGCA", 4); progress=false)
-        @test all(m[i] == "ACGTTGCA" for i in 1:4)
-
-        # one sequence; names; pairs; lowercase and gaps in the input
+        m4 = align(fill("ACGTTGCA", 4); progress=false)
+        @test all(m4[i] == "ACGTTGCA" for i in 1:4)
         @test align(["acg-t"]; progress=false)[1] == "ACGT"
         @test align(["a", "b"], ["ACGT", "ACGT"]; progress=false).names == ["a", "b"]
         @test align(["x" => "ACGT", "y" => "ACT"]; progress=false).names == ["x", "y"]
+        @test align(["ACGTRCGTAC", "ACGTACGTAC"]; progress=false)[1] == "ACGTRCGTAC"
+        @test align(["ACGU", "ACGT"]; progress=false)[1] == "ACGT"           # U read as T
+        @test align(["AC!GT", "ACNGT"]; progress=false)[1] == "ACNGT"        # unknown → N
         @test_throws ArgumentError align(String[])
         @test_throws ArgumentError align(["a", "a"], ["ACGT", "ACGT"])
         @test_throws ArgumentError align(["a"], ["ACGT", "ACGT"])
+        @test_throws ArgumentError align(["ACGT", "ACGA", "ACGG"]; maxiters=2, progress=false)
+        @test_throws ArgumentError align(["ACGT", "ACGA"]; maxiters=0)
     end
 
-    @testset "gap placement" begin
-        # an unambiguous internal deletion
-        m = align(["AAACCCGGGTTTACG", "AAACCCTTTACG"]; progress=false)
-        @test m[2] == "AAACCC---TTTACG"
-        # end gaps pay no opening penalty
-        m = align(["ACGTACGTACGGTTCA", "GTACGTACGGTTCA"]; progress=false)
-        @test m[2] == "--GTACGTACGGTTCA"
-        # ambiguity codes are kept and matched to the bases they allow
-        m = align(["ACGTRCGTAC", "ACGTACGTAC"]; progress=false)
-        @test m[1] == "ACGTRCGTAC" && m[2] == "ACGTACGTAC"
-        @test align(["ACGU", "ACGT"]; progress=false)[1] == "ACGU"
+    @testset "k-mer distance" begin
+        s = M._clean.(["ACGTACGTAC", "ACGTACGTAC", "TTTTTTTTTT", "ACG"])
+        D = M._kmerdist(s; threaded=false)
+        @test D[1, 2] == 0
+        @test D[1, 3] == 3                     # no shared 6-tuples
+        @test D == D'
+        @test length(M._tuples(M._clean("ACGTAC"))) == 1
+        @test length(M._tuples(M._clean("ACGTNACGT"))) == 4    # N is in the "other" group
+        @test M._kmerdist(s; threaded=true) == D
+    end
+
+    @testset "UPGMB guide tree and ClustalW weights" begin
+        D = Float32[0 1 4 4; 1 0 4 4; 4 4 0 2; 4 4 2 0]
+        t = M._upgmb(D)
+        @test (t.left[1], t.right[1]) == (1, 2)
+        @test (t.left[2], t.right[2]) == (3, 4)
+        @test Set((t.left[3], t.right[3])) == Set((5, 6))
+        @test t.leftlen[1] == 0.5f0 && t.rightlen[1] == 0.5f0
+        w = M._clustalw_weights(t)
+        @test sum(w) ≈ 1
+        @test w[1] == w[2] && w[3] == w[4] && w[1] < w[3]
+        @test M._clustalw_weights(M._upgmb(Float32[0 1; 1 0])) == [0.5f0, 0.5f0]
+    end
+
+    @testset "profiles and NWSmall" begin
+        p = M._Params(M._NUC_SP, -400.0f0, 0.0f0)
+        P = M._profile(reshape(collect(codeunits("AC-G")), 1, :), [1.0f0], p)
+        @test P.counts[:, 1] == [1, 0, 0, 0] && P.counts[:, 3] == zeros(4)
+        @test P.gapopen[3] == 0 && P.gapopen[1] == -200
+        # wildcards: X is split between G and A (as in MUSCLE), others add w/20 to each base
+        Q = M._profile(reshape(collect(codeunits("XN")), 1, :), [1.0f0], p)
+        @test Q.counts[:, 1] == Float32[0.5, 0, 0.5, 0]
+        @test Q.counts[:, 2] == fill(0.05f0, 4)
+        @test align(["AAACCCGGGTTTACG", "AAACCCTTTACG"]; progress=false)[2] == "AAACCC---TTTACG"
+        @test align(["ACGTACGTACGGTTCA", "GTACGTACGGTTCA"]; progress=false)[2] == "--GTACGTACGGTTCA"
     end
 
     @testset "accuracy on simulated sequences" begin
-        for seed in 1:3
-            truth = simulate(Xoshiro(seed))
-            m = align([String(last.(s)) for s in truth]; progress=false)
-            @test ungap.(collect(last.(m))) == [String(last.(s)) for s in truth]
-            @test sp_score(m, truth) > 0.95
+        for (seed, kw) in ((1, (n=20, sub=0.05, indel=2.0)), (2, (n=20, sub=0.15, indel=4.0)), (3, (n=60, sub=0.15, indel=4.0)))
+            truth = simulate(Xoshiro(seed); kw...)
+            m = align(sequences_of(truth); progress=false)
+            @test ungap.(collect(last.(m))) == sequences_of(truth)
+            @test accuracy(collect(last.(m)), truth).sp > 0.9
         end
-    end
-
-    @testset "guide tree" begin
-        # UPGMA merges the two closest pairs first
-        D = Float32[0 1 4 4; 1 0 4 4; 4 4 0 2; 4 4 2 0]
-        mg = MSABuilder._upgma(D)
-        @test Set(Set.(mg[1:2])) == Set([Set((1, 2)), Set((3, 4))])
-        @test Set(mg[3]) == Set((5, 6))
-        # k-mers skip ambiguous letters
-        @test length(MSABuilder._kmers(collect(codeunits("ACGTNACGT")), 3)) == 4
     end
 
     @testset "I/O and display" begin
@@ -125,17 +97,18 @@ end
         rm(path)
         s = sprint(show, MIME"text/plain"(), m)
         @test occursin("MSA · 2 sequences × 15 columns", s)
+        @test occursin("MUSCLE 3.8.31", s)
         @test occursin(m[2], s)
         @test sprint(show, m) == "MSA(2 sequences × 15 columns)"
     end
 
-    # the extensions, when the packages are installed
+    # the extensions, when the packages are installed (not on CI yet)
     if Base.find_package("PhyloBuilder") !== nothing
         @testset "PhyloBuilder" begin
             @eval using PhyloBuilder
             m = align(["ACGTACGTTTGACCA", "ACGTACGTGACCA", "ACGAACGTTTGACCA", "ACGAACGTTTGACCT"]; progress=false)
             @test Alignment(m) isa Alignment
-            @test ntaxa(m) == 4 && nsites(m) == 15
+            @test ntaxa(m) == 4 && nsites(m) == size(m, 2)
             @test distances(m) == distances(Alignment(m))
             @test nj(m; progress=false) isa PhyloBuilder.PhyloTree
         end

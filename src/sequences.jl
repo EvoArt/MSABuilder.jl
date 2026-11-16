@@ -1,40 +1,4 @@
-# Input sequences: reading, cleaning and encoding.
-
-const _GAPCHARS = (UInt8('-'), UInt8('.'))
-const _GAP = UInt8('-')
-
-# IUPAC nucleotide codes as fractions of A, C, G, T for scoring. N, gaps
-# and unknown letters score 0 against everything.
-const _FRAC = let t = zeros(Float32, 4, 256)
-    codes = Dict('A' => "A", 'C' => "C", 'G' => "G", 'T' => "T", 'U' => "T",
-                 'R' => "AG", 'Y' => "CT", 'S' => "CG", 'W' => "AT", 'K' => "GT", 'M' => "AC",
-                 'B' => "CGT", 'D' => "AGT", 'H' => "ACT", 'V' => "ACG")
-    for (c, bases) in codes, b in bases
-        t[findfirst(b, "ACGT"), UInt8(c)+1] = 1 / length(bases)
-    end
-    t
-end
-
-# 2-bit code of A/C/G/T(U) for k-mers; 0xff otherwise
-const _KCODE = let t = fill(0xff, 256)
-    for (c, v) in zip("ACGTU", (0, 1, 2, 3, 3))
-        t[UInt8(c)+1] = v
-    end
-    t
-end
-
-# uppercase ASCII bytes of `s` without gaps or whitespace
-function _clean(s)
-    str = string(s)
-    out = UInt8[]
-    sizehint!(out, ncodeunits(str))
-    for b in codeunits(str)
-        (b in _GAPCHARS || isspace(Char(b))) && continue
-        b < 0x80 || throw(ArgumentError("non-ASCII character in a sequence"))
-        push!(out, UInt8(uppercase(Char(b))))
-    end
-    return out
-end
+# Reading unaligned sequences.
 
 """
     readsequences(path) -> Vector{Pair{String,String}}

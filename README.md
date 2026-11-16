@@ -2,12 +2,13 @@
 
 [![CI](https://github.com/EvoArt/MSABuilder.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/EvoArt/MSABuilder.jl/actions/workflows/CI.yml)
 
-Multiple sequence alignment of nucleotide sequences in pure Julia.
-Progressive alignment along a k-mer UPGMA guide tree, with profile–profile
-alignment and affine gap penalties. No external binaries, so it runs on
-Windows, macOS and Linux.
+Multiple sequence alignment of nucleotide sequences: a Julia port of
+MUSCLE 3.8.31 (Edgar 2004, *Nucleic Acids Res.* 32:1792). No external
+binaries, so it runs on Windows, macOS and Linux. Output matches
+MUSCLE 3.8.31 with `-maxiters 1` on the test sets in `test/fixtures`.
 
-Under development.
+Under development: MUSCLE's refinement iterations (`maxiters > 1`) are not
+ported yet.
 
 ```julia
 using Pkg

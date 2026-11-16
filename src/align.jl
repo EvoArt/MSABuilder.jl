@@ -16,7 +16,7 @@ and tree functions (`nj(msa)`, `distances(msa)`, …) or converted with
 struct MSA
     names::Vector{String}
     data::Matrix{UInt8}            # sequences × columns, '-' for gaps
-    scoring::NamedTuple
+    params::NamedTuple             # MUSCLE options used
 end
 
 Base.length(m::MSA) = size(m.data, 1)
@@ -33,22 +33,22 @@ Base.eltype(::Type{MSA}) = Pair{String,String}
 Base.:(==)(a::MSA, b::MSA) = a.names == b.names && a.data == b.data
 
 """
-    align(seqs; names, k=6, match=5, mismatch=-4, gapopen=10, gapextend=1,
-          threaded=true, progress) -> MSA
+    align(seqs; names, maxiters=1, gapopen=-400, gapextend=0, threaded=true, progress) -> MSA
     align(names, seqs; kwargs...)
     align(["name" => seq, …]; kwargs...)
     align(path; kwargs...)                  # a FASTA file
 
-Align nucleotide sequences progressively: a guide tree is built by UPGMA
-from `k`-mer distances, then sequences and groups are joined up the tree by
-profile alignment with affine gap penalties (a gap of length `n` costs
-`gapopen + n * gapextend`; gaps at the ends of the alignment cost
-`n * gapextend`).
+Align nucleotide sequences with MUSCLE 3.8.31 (Edgar 2004), ported to
+Julia: k-mer distances (MUSCLE's `kmer4_6`), a UPGMB guide tree, ClustalW
+sequence weights and progressive profile–profile alignment, with MUSCLE's
+DNA scoring (`-gapopen -400`, `-gapextend 0`, half-penalised terminal gaps).
+This is MUSCLE's first iteration (`-maxiters 1`); the refinement
+iterations are not ported yet, so `maxiters` must be 1.
 
 Sequences can be strings or anything whose `string` is the sequence (e.g.
-BioSequences' `LongDNA`). Gaps in the input are removed; IUPAC ambiguity
-codes are kept and scored by the bases they allow; `U` is read as `T`.
-Names default to `seq1`, `seq2`, …; rows of the result are in input order.
+BioSequences' `LongDNA`). Gaps in the input are removed, `U` is read as
+`T`, and characters other than IUPAC nucleotide codes become `N`. Names
+default to `seq1`, `seq2`, …; rows of the result are in input order.
 
 With DenoiseDNA loaded, `align(seqtab)` aligns the ASVs of a
 `SequenceTable` (named `ASV1`, `ASV2`, … in column order).
@@ -60,43 +60,33 @@ end
 align(pairs::AbstractVector{<:Pair}; kwargs...) = align(first.(pairs), last.(pairs); kwargs...)
 align(path::AbstractString; kwargs...) = align(readsequences(path); kwargs...)
 
-function align(names::AbstractVector, seqs::AbstractVector; k::Integer=6,
-               match::Real=5, mismatch::Real=-4, gapopen::Real=10, gapextend::Real=1,
+function align(names::AbstractVector, seqs::AbstractVector; maxiters::Integer=1,
+               gapopen::Real=-400, gapextend::Real=0,
                threaded::Bool=true, progress::Bool=_progress_default())
     length(names) == length(seqs) || throw(ArgumentError("$(length(names)) names for $(length(seqs)) sequences"))
     isempty(seqs) && throw(ArgumentError("no sequences"))
     names = String[string(x) for x in names]
     allunique(names) || throw(ArgumentError("sequence names must be unique"))
-    1 <= k <= 12 || throw(ArgumentError("k must be in 1:12"))
-    sc = _Scoring(match, mismatch, gapopen, gapextend)
-    scoring = (; match, mismatch, gapopen, gapextend, k)
+    maxiters >= 1 || throw(ArgumentError("maxiters must be ≥ 1"))
+    p = _Params(_NUC_SP, gapopen, gapextend)
+    params = (; maxiters, gapopen, gapextend)
     enc = [_clean(s) for s in seqs]
     n = length(enc)
-    n == 1 && return MSA(names, reshape(enc[1], 1, :), scoring)
+    n == 1 && return MSA(names, reshape(enc[1], 1, :), params)
 
     bars = progress && n >= 50
-    p = _progress(n, "Distances"; unit="rows", enabled=bars)
-    D = _kmerdist(enc, Int(k); threaded, prog=p)
-    _finish!(p)
-    merges = _upgma(D)
-
-    p = _progress(length(merges), "Aligning"; unit="merges", enabled=bars)
-    groups = Vector{Matrix{UInt8}}(undef, n + length(merges))
-    members = Vector{Vector{Int}}(undef, n + length(merges))
-    for i in 1:n
-        groups[i] = reshape(enc[i], 1, :)
-        members[i] = [i]
+    pr = _progress(n, "Distances"; unit="rows", enabled=bars)
+    tree = _upgmb(_kmerdist(enc; threaded, prog=pr))
+    _finish!(pr)
+    pr = _progress(n - 1, "Aligning"; unit="joins", enabled=bars)
+    g = _progressive(enc, tree, p; prog=pr)
+    _finish!(pr)
+    if maxiters >= 2 && n > 2
+        g = _refine(g, enc, tree, p, maxiters; threaded, bars)
     end
-    for (t, (a, b)) in enumerate(merges)
-        groups[n+t] = _alignprofiles(groups[a], groups[b], sc)
-        members[n+t] = vcat(members[a], members[b])
-        groups[a] = groups[b] = Matrix{UInt8}(undef, 0, 0)    # free them
-        _next!(p)
-    end
-    _finish!(p)
-    data = similar(groups[end])
-    data[members[end], :] = groups[end]
-    return MSA(names, data, scoring)
+    data = similar(g.rows)
+    data[g.ids, :] = g.rows
+    return MSA(names, data, params)
 end
 
 """
