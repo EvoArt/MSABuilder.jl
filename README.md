@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/EvoArt/MSABuilder.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/EvoArt/MSABuilder.jl/actions/workflows/CI.yml)
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://EvoArt.github.io/MSABuilder.jl/dev/)
+[![Coverage](https://codecov.io/gh/EvoArt/MSABuilder.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/EvoArt/MSABuilder.jl)
 
 Multiple sequence alignment of nucleotide sequences: a Julia port of
 MUSCLE 3.8.31 (Edgar 2004, *Nucleic Acids Res.* 32:1792). Output matches
