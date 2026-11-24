@@ -13,13 +13,16 @@ DenoiseDNA = "be660749-8e35-4f43-b287-dc089089f845"
 MSABuilderDenoiseDNAExt = "DenoiseDNA"
 
 [compat]
+DataFrames = "1"
 DenoiseDNA = "0.2"
 Printf = "1"
 julia = "1.10"
 
 [extras]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DenoiseDNA = "be660749-8e35-4f43-b287-dc089089f845"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Random", "Test"]
+test = ["DataFrames", "DenoiseDNA", "Random", "Test"]

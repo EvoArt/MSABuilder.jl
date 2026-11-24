@@ -19,11 +19,6 @@ function _sty(io, s; color=nothing, bold::Bool=false)
     return isempty(pre) ? string(s) : string(pre, s, "\e[0m")
 end
 
-# visible width (escape codes removed)
-_vis(s) = textwidth(replace(string(s), r"\e\[[0-9;]*m" => ""))
-_lpad(s, n) = repeat(' ', max(0, n - _vis(s))) * s
-_rpad(s, n) = s * repeat(' ', max(0, n - _vis(s)))
-
 _termwidth(io) = clamp(displaysize(io)[2], 40, 200)
 
 # 1234567 -> "1,234,567"
@@ -130,37 +125,6 @@ function _bin(v::AbstractVector{<:Real}, w::Int)
 end
 
 
-# a plain table: header in dim, columns right-aligned unless `align[j] == :l`
-function _table(io, header::AbstractVector{<:AbstractString}, rows::AbstractVector{<:AbstractVector{<:AbstractString}};
-                align=fill(:r, length(header)), indent=2)
-    nc = length(header)
-    w = [maximum(_vis(r[j]) for r in vcat([header], rows)) for j in 1:nc]
-    pad(s, j) = align[j] === :l ? _rpad(s, w[j]) : _lpad(s, w[j])
-    pre = repeat(' ', indent)
-    println(io, pre, _sty(io, rstrip(join((pad(header[j], j) for j in 1:nc), "  ")); color=_PAL.key))
-    for r in rows
-        println(io, rstrip(pre * join((pad(r[j], j) for j in 1:nc), "  ")))
-    end
-end
-
 # rows to show of `n`; `:rows => k` in the IOContext asks for more
 _nshow(io, n, k) = min(n, get(io, :rows, k)::Int)
 _more(io, n, shown, what) = n > shown && println(io, _note(io, "  … $(_fmt(n - shown)) more $what"))
-
-# a list of names, shortened to fit `w` characters
-function _names(io, names, w)
-    isempty(names) && return ""
-    out = String[]
-    used = 0
-    for (i, s) in enumerate(names)
-        rest = length(names) - i
-        tail = rest > 0 ? textwidth(", … $(rest) more") : 0
-        if used + textwidth(s) + 2 + tail > w && i > 1
-            push!(out, _note(io, "… $(_fmt(length(names) - i + 1)) more"))
-            break
-        end
-        push!(out, s)
-        used += textwidth(s) + 2
-    end
-    return join(out, ", ")
-end
